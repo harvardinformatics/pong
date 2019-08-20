@@ -19,7 +19,7 @@ import tornado.websocket
 sys.path.insert(0, path.join(path.dirname(__file__),'src'))
 import parse, cm, write, align, distruct
 
-
+PONG_URL_PREFIX=os.environ.get("PONG_URL_PREFIX","/")
 
 clients = []
 threads = []
@@ -127,6 +127,8 @@ def main():
 		'exit and re-run with different parameters.')
 
 	opts = parser.parse_args()
+
+	PONG_HTTP_ORIGIN=os.environ.get("PONG_HTTP_ORIGIN", "http://localhost:" + str(opts.port))
 
 	# Check system Python version
 	if sys.version_info.major != 2:
@@ -278,10 +280,10 @@ def main():
 
 	if not opts.disable_server:
 		app = Application()
-		app.listen(opts.port)
+		app.listen(int(os.environ.get("PONG_PORT", opts.port)))
 		msg = '-----------------------------------------------------------\n'
 		msg += 'pong server is now running locally & listening on port %s\n' % opts.port
-		msg += 'Open your web browser and navigate to http://localhost:%s to see the visualization\n\n'% opts.port
+		msg += 'Open your web browser and navigate to %s%s to see the visualization\n\n'% (PONG_HTTP_ORIGIN, PONG_URL_PREFIX)
 		sys.stdout.write(msg)
 		
 		try:
@@ -354,14 +356,17 @@ def run_pong(pongdata, opts, pong_filemap, labels, ind2pop):
 class Application(tornado.web.Application):
 	def __init__(self):
 		handlers = [
-			(r"/", MainHandler),
-			(r"/pongsocket", WSHandler),
+			(PONG_URL_PREFIX, MainHandler),
+			(PONG_URL_PREFIX + "pongsocket", WSHandler)
 		]
 		settings = dict(
 			template_path=path.join(path.dirname(__file__), "templates"),
 			static_path=path.join(path.dirname(__file__), "static"),
+			#static_url_prefix=os.environ.get('PONG_URL_PREFIX',"/") + 'static'
+			static_url_prefix=PONG_URL_PREFIX + 'static/',
+            logging="debug"
 		)
-		tornado.web.Application.__init__(self, handlers, **settings)
+		tornado.web.Application.__init__(self, handlers, debug=True, **settings)
 
 
 class MainHandler(tornado.web.RequestHandler):
@@ -371,6 +376,9 @@ class MainHandler(tornado.web.RequestHandler):
 class WSHandler(tornado.websocket.WebSocketHandler):
 	global pongdata
 	clients = set()
+
+	def check_origin(self, origin):
+		return True
 
 	def open(self):
 		WSHandler.clients.add(self)
